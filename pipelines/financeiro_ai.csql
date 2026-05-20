@@ -398,4 +398,8 @@ embeddedData AS (
   )
 )
 
-SELECT * FROM embeddedData
+SELECT
+  *,
+  CONCAT(CAST(protheus_pk AS STRING), '_', SUBSTR(TO_HEX(MD5(CAST(RAND() AS STRING))), 1, 8)) AS __mdmId,
+  0 AS __mdmCounterForEntity
+FROM embeddedData
