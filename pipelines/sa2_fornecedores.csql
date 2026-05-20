@@ -1,20 +1,8 @@
-/* Pipeline Cadastro de Fornecedores (SA2) - Agente de IA
- *
- * Fonte   : SA2 (Fornecedores Protheus)
- *           SX5 tabela 'A2' — tipos de fornecedor
- *           SX5 tabela '13' — regiões
- *
- * Saída   : Cadastro de fornecedores deduplicado, enriquecido com
- *           classificações e embeddings para busca semântica.
- *
- * @since   2026-05
- */
-
 WITH
 
--- ==============================================================
+
 -- LOOKUP — Tipos de fornecedor e regiões (SX5)
--- ==============================================================
+
 
 sx5_tipos_fornecedor AS (
   SELECT * EXCEPT(ranking)
@@ -37,9 +25,9 @@ sx5_tipos_fornecedor AS (
   WHERE ranking = 1
 ),
 
--- ==============================================================
+
 -- STAGING — SA2 com deduplicação via QUALIFY
--- ==============================================================
+
 
 sa2_dataprepingestion AS (
   SELECT *
@@ -56,9 +44,9 @@ sa2_dataprepingestion AS (
     AND (mdmDeleted = FALSE OR mdmDeleted IS NULL)
 ),
 
--- ==============================================================
+
 -- ENRIQUECIMENTO — SA2 + SX5
--- ==============================================================
+
 
 fornecedores_enriquecidos AS (
   SELECT
@@ -135,9 +123,9 @@ fornecedores_enriquecidos AS (
 
 ),
 
--- ==============================================================
+
 -- MÉTRICAS E CONTEÚDO — Texto narrativo para o agente de IA
--- ==============================================================
+
 
 processedData AS (
   SELECT
@@ -175,9 +163,9 @@ processedData AS (
   -- rejection rules
 ),
 
--- ==============================================================
+
 -- EMBEDDINGS — Representação vetorial para busca semântica
--- ==============================================================
+
 
 embeddedData AS (
   SELECT

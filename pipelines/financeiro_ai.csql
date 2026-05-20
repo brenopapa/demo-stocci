@@ -1,21 +1,8 @@
-/* Pipeline Financeiro Protheus - Agente de IA
- *
- * Fontes  : SE1 (Contas a Receber), SE2 (Contas a Pagar)
- *           SA1 (Clientes), SA2 (Fornecedores)
- *           CT1 (Plano de Contas), CTT (Centro de Custo)
- *           SA6 (Bancos / Contas Correntes), SX5 (Tabelas Genéricas)
- *
- * Saída   : Visão financeira unificada com enriquecimento dimensional,
- *           métricas de aging e embeddings para busca semântica pelo agente de IA.
- *
- * @since   2026-05
- */
-
 WITH
 
--- ==============================================================
+
 -- DIMENSÕES — deduplicação por protheus_pk + filtro de deletados
--- ==============================================================
+
 
 sa1_clientes AS (
   SELECT
@@ -151,9 +138,9 @@ sx5_tabelas AS (
   WHERE ranking = 1
 ),
 
--- ==============================================================
+
 -- FATOS — Staging com QUALIFY (deduplicação por mdmId/protheus_pk)
--- ==============================================================
+
 
 se1_receber_dataprepingestion AS (
   SELECT *
@@ -183,9 +170,9 @@ se2_pagar_dataprepingestion AS (
     AND (mdmDeleted = FALSE OR mdmDeleted IS NULL)
 ),
 
--- ==============================================================
+
 -- ENRIQUECIMENTO — SE1 + dimensões
--- ==============================================================
+
 
 contas_receber AS (
   SELECT
@@ -283,9 +270,9 @@ contas_receber AS (
     AND sa6.A6_COD        = TRIM(se1.E1_PORTADO)
 ),
 
--- ==============================================================
+
 -- ENRIQUECIMENTO — SE2 + dimensões
--- ==============================================================
+
 
 contas_pagar AS (
   SELECT
@@ -383,9 +370,9 @@ contas_pagar AS (
     AND sa6.A6_COD        = TRIM(se2.E2_PORTADO)
 ),
 
--- ==============================================================
+
 -- UNIFICAÇÃO — Contas a Pagar + Receber em visão única
--- ==============================================================
+
 
 visao_financeira AS (
   SELECT * FROM contas_receber
@@ -393,9 +380,9 @@ visao_financeira AS (
   SELECT * FROM contas_pagar
 ),
 
--- ==============================================================
+
 -- MÉTRICAS E CONTEÚDO — Enriquecimento para o agente de IA
--- ==============================================================
+
 
 processedData AS (
   SELECT
@@ -455,9 +442,9 @@ processedData AS (
   -- rejection rules
 ),
 
--- ==============================================================
+
 -- EMBEDDINGS — Representação vetorial para busca semântica
--- ==============================================================
+
 
 embeddedData AS (
   SELECT

@@ -17,35 +17,35 @@
                 "dataModels": [],
                 "stagings": [
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_se1"
                     },
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_se2"
                     },
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_sa1"
                     },
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_sa2"
                     },
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_ct1"
                     },
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_ctt"
                     },
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_sa6"
                     },
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_sx5"
                     }
                 ]
@@ -93,11 +93,11 @@
                 "dataModels": [],
                 "stagings": [
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_sa1"
                     },
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_sx5"
                     }
                 ]
@@ -145,11 +145,11 @@
                 "dataModels": [],
                 "stagings": [
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_sa2"
                     },
                     {
-                        "connectorName": "rm_carol",
+                        "connectorName": "protheus_carol",
                         "stagingName": "ingestion_stg_protheus_carol_sx5"
                     }
                 ]

@@ -1,20 +1,7 @@
-/* Pipeline Cadastro de Clientes (SA1) - Agente de IA
- *
- * Fonte   : SA1 (Clientes Protheus)
- *           SX5 tabela 'A1' — tipos de cliente
- *           SX5 tabela '13' — regiões de venda
- *
- * Saída   : Cadastro de clientes deduplicado, enriquecido com
- *           classificações e embeddings para busca semântica.
- *
- * @since   2026-05
- */
-
 WITH
 
--- ==============================================================
 -- LOOKUP — Tipos de cliente e regiões (SX5)
--- ==============================================================
+
 
 sx5_tipos_cliente AS (
   SELECT * EXCEPT(ranking)
@@ -37,9 +24,9 @@ sx5_tipos_cliente AS (
   WHERE ranking = 1
 ),
 
--- ==============================================================
+
 -- STAGING — SA1 com deduplicação via QUALIFY
--- ==============================================================
+
 
 sa1_dataprepingestion AS (
   SELECT *
@@ -56,9 +43,9 @@ sa1_dataprepingestion AS (
     AND (mdmDeleted = FALSE OR mdmDeleted IS NULL)
 ),
 
--- ==============================================================
+
 -- ENRIQUECIMENTO — SA1 + SX5
--- ==============================================================
+
 
 clientes_enriquecidos AS (
   SELECT
@@ -142,9 +129,9 @@ clientes_enriquecidos AS (
     AND sx5_reg.X5_CHAVE      = TRIM(sa1.A1_REGIAO)
 ),
 
--- ==============================================================
+
 -- MÉTRICAS E CONTEÚDO — Texto narrativo para o agente de IA
--- ==============================================================
+
 
 processedData AS (
   SELECT
@@ -183,9 +170,9 @@ processedData AS (
   -- rejection rules
 ),
 
--- ==============================================================
+
 -- EMBEDDINGS — Representação vetorial para busca semântica
--- ==============================================================
+
 
 embeddedData AS (
   SELECT
