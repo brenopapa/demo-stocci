@@ -1,0 +1,189 @@
+{
+    "defaults": {
+        "cronExpressions": [],
+        "prepareScripts": []
+    },
+    "pipelines": [
+        {
+            "pipelineName": "Financeiro Protheus AI",
+            "pipelineDescription": "Pipeline financeiro (SE1/SE2) com enriquecimento dimensional e embeddings para agente de IA",
+            "outputDataModelName": "financeiroai",
+            "cronExpressions": [
+                "0 0 0 1 1 ? 2099"
+            ],
+            "timeZone": "America/Sao_Paulo",
+            "processScript": "pipelines/financeiro_ai.csql",
+            "sourceEntities": {
+                "dataModels": [],
+                "stagings": [
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_se1"
+                    },
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_se2"
+                    },
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_sa1"
+                    },
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_sa2"
+                    },
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_ct1"
+                    },
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_ctt"
+                    },
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_sa6"
+                    },
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_sx5"
+                    }
+                ]
+            },
+            "checkExistsDataToProcess": false,
+            "useBatchNotification": false,
+            "sendTo": {
+                "bigquery": {
+                    "customer": true,
+                    "unified": true
+                },
+                "subscriptions": {
+                    "customer": false,
+                    "unified": false
+                },
+                "lowLatency": {
+                    "unified": true,
+                    "customer": true
+                },
+                "realtime": false
+            },
+            "clear": {
+                "bigquery": {
+                    "unified": false,
+                    "customer": false
+                },
+                "subscriptions": {
+                    "unified": false,
+                    "customer": false
+                },
+                "realtime": false
+            },
+            "fanOut": true
+        },
+        {
+            "pipelineName": "Cadastro Clientes Protheus",
+            "pipelineDescription": "Pipeline de cadastro de clientes (SA1) com enriquecimento e embeddings para busca semântica",
+            "outputDataModelName": "clientessa1",
+            "cronExpressions": [
+                "0 0 0 1 1 ? 2099"
+            ],
+            "timeZone": "America/Sao_Paulo",
+            "processScript": "pipelines/sa1_clientes.csql",
+            "sourceEntities": {
+                "dataModels": [],
+                "stagings": [
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_sa1"
+                    },
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_sx5"
+                    }
+                ]
+            },
+            "checkExistsDataToProcess": false,
+            "useBatchNotification": false,
+            "sendTo": {
+                "bigquery": {
+                    "customer": true,
+                    "unified": true
+                },
+                "subscriptions": {
+                    "customer": false,
+                    "unified": false
+                },
+                "lowLatency": {
+                    "unified": true,
+                    "customer": true
+                },
+                "realtime": false
+            },
+            "clear": {
+                "bigquery": {
+                    "unified": false,
+                    "customer": false
+                },
+                "subscriptions": {
+                    "unified": false,
+                    "customer": false
+                },
+                "realtime": false
+            },
+            "fanOut": true
+        },
+        {
+            "pipelineName": "Cadastro Fornecedores Protheus",
+            "pipelineDescription": "Pipeline de cadastro de fornecedores (SA2) com enriquecimento e embeddings para busca semântica",
+            "outputDataModelName": "fornecedoressa2",
+            "cronExpressions": [
+                "0 0 0 1 1 ? 2099"
+            ],
+            "timeZone": "America/Sao_Paulo",
+            "processScript": "pipelines/sa2_fornecedores.csql",
+            "sourceEntities": {
+                "dataModels": [],
+                "stagings": [
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_sa2"
+                    },
+                    {
+                        "connectorName": "rm_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_sx5"
+                    }
+                ]
+            },
+            "checkExistsDataToProcess": false,
+            "useBatchNotification": false,
+            "sendTo": {
+                "bigquery": {
+                    "customer": true,
+                    "unified": true
+                },
+                "subscriptions": {
+                    "customer": false,
+                    "unified": false
+                },
+                "lowLatency": {
+                    "unified": true,
+                    "customer": true
+                },
+                "realtime": false
+            },
+            "clear": {
+                "bigquery": {
+                    "unified": false,
+                    "customer": false
+                },
+                "subscriptions": {
+                    "unified": false,
+                    "customer": false
+                },
+                "realtime": false
+            },
+            "fanOut": true
+        }
+    ],
+    "version": "V2"
+}

@@ -1,0 +1,201 @@
+/* Pipeline Cadastro de Clientes (SA1) - Agente de IA
+ *
+ * Fonte   : SA1 (Clientes Protheus)
+ *           SX5 tabela 'A1' — tipos de cliente
+ *           SX5 tabela '13' — regiões de venda
+ *
+ * Saída   : Cadastro de clientes deduplicado, enriquecido com
+ *           classificações e embeddings para busca semântica.
+ *
+ * @since   2026-05
+ */
+
+WITH
+
+-- ==============================================================
+-- LOOKUP — Tipos de cliente e regiões (SX5)
+-- ==============================================================
+
+sx5_tipos_cliente AS (
+  SELECT * EXCEPT(ranking)
+  FROM (
+    SELECT
+      mdmTenantId,
+      company_group,
+      X5_FILIAL,
+      TRIM(X5_TABELA) AS X5_TABELA,
+      TRIM(X5_CHAVE)  AS X5_CHAVE,
+      X5_DESCRI,
+      ROW_NUMBER() OVER (
+        PARTITION BY mdmTenantId, company_group, X5_FILIAL, X5_TABELA, X5_CHAVE
+        ORDER BY mdmCounterForEntity DESC, mdmLastUpdated DESC
+      ) AS ranking
+    FROM ingestion_stg_protheus_carol_sx5
+    WHERE X5_TABELA IN ('A1', '13', 'AL')
+      AND TRIM(Deleted) = 'false'
+  )
+  WHERE ranking = 1
+),
+
+-- ==============================================================
+-- STAGING — SA1 com deduplicação via QUALIFY
+-- ==============================================================
+
+sa1_dataprepingestion AS (
+  SELECT *
+  FROM (
+    SELECT *
+    FROM ingestion_stg_protheus_carol_sa1
+    WHERE TRIM(Deleted) = 'false'
+    QUALIFY ROW_NUMBER() OVER (
+      PARTITION BY mdmTenantId, protheus_pk
+      ORDER BY _ingestionDatetime DESC, mdmCounterForEntity DESC
+    ) = 1
+  ) AS stg
+  WHERE TRIM(Deleted) = 'false'
+    AND (mdmDeleted = FALSE OR mdmDeleted IS NULL)
+),
+
+-- ==============================================================
+-- ENRIQUECIMENTO — SA1 + SX5
+-- ==============================================================
+
+clientes_enriquecidos AS (
+  SELECT
+    -- Identificação
+    sa1.mdmTenantId,
+    sa1.company_group,
+    TRIM(sa1.A1_FILIAL)                                          AS filial,
+    TRIM(sa1.A1_COD)                                             AS cod_cliente,
+    TRIM(sa1.A1_LOJA)                                            AS loja,
+
+    -- Chave de embedding
+    TO_HEX(MD5(CONCAT(
+      sa1.mdmTenantId, '|SA1|',
+      TRIM(sa1.A1_FILIAL), '|',
+      TRIM(sa1.A1_COD), '|',
+      TRIM(sa1.A1_LOJA)
+    )))                                                          AS cliente_key,
+
+    -- Dados cadastrais
+    sa1.A1_NOME,
+    sa1.A1_NREDUZ                                                AS nome_reduzido,
+    CASE TRIM(sa1.A1_PESSOA)
+      WHEN 'F' THEN 'Física'
+      WHEN 'J' THEN 'Jurídica'
+      ELSE          'Não informado'
+    END                                                          AS tipo_pessoa,
+    sa1.A1_CGC                                                   AS cnpj_cpf,
+
+    -- Endereço
+    sa1.A1_END                                                   AS endereco,
+    sa1.A1_BAIRRO                                                AS bairro,
+    sa1.A1_MUN                                                   AS municipio,
+    sa1.A1_EST                                                   AS estado,
+    sa1.A1_CEP                                                   AS cep,
+    sa1.A1_PAIS                                                  AS pais,
+
+    -- Contato
+    sa1.A1_TEL                                                   AS telefone,
+    sa1.A1_FAX                                                   AS fax,
+    sa1.A1_EMAIL                                                 AS email,
+    sa1.A1_CONTATO                                               AS contato,
+    sa1.A1_HPAGE                                                 AS site,
+
+    -- Classificação comercial
+    TRIM(sa1.A1_TIPO)                                            AS tipo_cliente_cod,
+    sx5_tipo.X5_DESCRI                                           AS tipo_cliente,
+    TRIM(sa1.A1_GRPVEN)                                          AS grupo_venda,
+    TRIM(sa1.A1_VEND)                                            AS vendedor,
+    TRIM(sa1.A1_REGIAO)                                          AS regiao_cod,
+    sx5_reg.X5_DESCRI                                            AS regiao,
+
+    -- Crédito e situação
+    SAFE_CAST(TRIM(sa1.A1_LC)     AS NUMERIC)                    AS limite_credito,
+    SAFE_CAST(TRIM(sa1.A1_SALDUP) AS NUMERIC)                    AS saldo_duplicatas,
+    TRIM(sa1.A1_MSBLQL)                                          AS bloqueio,
+    CASE TRIM(sa1.A1_MSBLQL)
+      WHEN '1' THEN 'Bloqueado por financeiro'
+      WHEN '2' THEN 'Bloqueado por estoque'
+      WHEN '3' THEN 'Bloqueado por ambos'
+      WHEN ' ' THEN 'Desbloqueado'
+      ELSE          TRIM(sa1.A1_MSBLQL)
+    END                                                          AS status_bloqueio,
+
+    -- Metadados de ingestão
+    sa1._ingestionDatetime,
+    sa1.mdmCounterForEntity,
+    sa1.protheus_pk
+
+  FROM sa1_dataprepingestion AS sa1
+
+  LEFT JOIN sx5_tipos_cliente AS sx5_tipo
+    ON  sx5_tipo.mdmTenantId   = sa1.mdmTenantId
+    AND sx5_tipo.company_group = sa1.company_group
+    AND sx5_tipo.X5_TABELA     = 'A1'
+    AND sx5_tipo.X5_CHAVE      = TRIM(sa1.A1_TIPO)
+
+  LEFT JOIN sx5_tipos_cliente AS sx5_reg
+    ON  sx5_reg.mdmTenantId   = sa1.mdmTenantId
+    AND sx5_reg.company_group = sa1.company_group
+    AND sx5_reg.X5_TABELA     = '13'
+    AND sx5_reg.X5_CHAVE      = TRIM(sa1.A1_REGIAO)
+),
+
+-- ==============================================================
+-- MÉTRICAS E CONTEÚDO — Texto narrativo para o agente de IA
+-- ==============================================================
+
+processedData AS (
+  SELECT
+    *,
+
+    -- Score de risco de crédito simples (para triagem pelo agente)
+    CASE
+      WHEN bloqueio NOT IN (' ', '')                                  THEN 'Bloqueado'
+      WHEN limite_credito IS NULL OR limite_credito = 0               THEN 'Sem limite cadastrado'
+      ELSE                                                             'Regular'
+    END                                                              AS risco_credito,
+
+    -- Texto narrativo para indexação semântica
+    TRIM(CONCAT(
+      'Cliente: ', A1_NOME,
+        IF(nome_reduzido IS NOT NULL, CONCAT(' (', nome_reduzido, ')'), ''), '. ',
+      'Código: ', cod_cliente, '-', loja, '. ',
+      'Tipo: ', tipo_pessoa,
+        IF(tipo_cliente IS NOT NULL, CONCAT(' — ', tipo_cliente), ''), '. ',
+      'CNPJ/CPF: ', COALESCE(cnpj_cpf, 'Não informado'), '. ',
+      'Localização: ',
+        COALESCE(municipio, ''), IF(estado IS NOT NULL, CONCAT('/', estado), ''),
+        IF(pais IS NOT NULL AND TRIM(pais) NOT IN ('', 'BRA', 'Brasil'), CONCAT(' — ', pais), ''), '. ',
+      IF(regiao IS NOT NULL,      CONCAT('Região: ', regiao, '. '), ''),
+      IF(grupo_venda IS NOT NULL, CONCAT('Grupo de venda: ', grupo_venda, '. '), ''),
+      IF(vendedor IS NOT NULL,    CONCAT('Vendedor: ', vendedor, '. '), ''),
+      IF(limite_credito IS NOT NULL AND limite_credito > 0,
+         CONCAT('Limite de crédito: R$ ', FORMAT('%.2f', limite_credito), '. '), ''),
+      'Status: ', status_bloqueio, '. ',
+      IF(email IS NOT NULL,    CONCAT('E-mail: ', email, '. '), ''),
+      IF(telefone IS NOT NULL, CONCAT('Telefone: ', telefone, '.'), '')
+    ))                                                               AS text_concat
+
+  FROM clientes_enriquecidos
+  -- WHERE
+  -- rejection rules
+),
+
+-- ==============================================================
+-- EMBEDDINGS — Representação vetorial para busca semântica
+-- ==============================================================
+
+embeddedData AS (
+  SELECT
+    * EXCEPT(ml_generate_embedding_result, ml_generate_embedding_statistics, ml_generate_embedding_status),
+    ml_generate_embedding_result AS embedded_content_128
+  FROM ML.GENERATE_EMBEDDING(
+    MODEL `ideia-dataops-prod.models.text_embedder`,
+    (SELECT *, text_concat AS content FROM processedData),
+    STRUCT(TRUE AS flatten_json_output, 'RETRIEVAL_DOCUMENT' AS task_type, 128 AS OUTPUT_DIMENSIONALITY)
+  )
+)
+
+SELECT * FROM embeddedData
