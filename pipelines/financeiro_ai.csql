@@ -1,9 +1,4 @@
 WITH
-
-
--- DIMENSÕES — deduplicação por protheus_pk + filtro de deletados
-
-
 sa1_clientes AS (
   SELECT
     mdmTenantId,
@@ -115,7 +110,6 @@ sa6_bancos AS (
   WHERE TRIM(Deleted) = 'false'
 ),
 
--- Tabelas genéricas: naturezas financeiras (05), tipos de título (A1/A2)
 sx5_tabelas AS (
   SELECT
     * EXCEPT(ranking)
@@ -137,10 +131,6 @@ sx5_tabelas AS (
   )
   WHERE ranking = 1
 ),
-
-
--- FATOS — Staging com QUALIFY (deduplicação por mdmId/protheus_pk)
-
 
 se1_receber_dataprepingestion AS (
   SELECT *
@@ -170,24 +160,18 @@ se2_pagar_dataprepingestion AS (
     AND (mdmDeleted = FALSE OR mdmDeleted IS NULL)
 ),
 
-
--- ENRIQUECIMENTO — SE1 + dimensões
-
-
 contas_receber AS (
   SELECT
-    -- Identificação do título
-    'RECEBER'                                                    AS carteira,
+    'RECEBER' AS carteira,
     se1.mdmTenantId,
     se1.company_group,
-    TRIM(se1.E1_FILIAL)                                          AS filial,
-    TRIM(se1.E1_PREFIXO)                                         AS prefixo,
-    TRIM(se1.E1_NUM)                                             AS numero,
-    TRIM(se1.E1_PARCELA)                                         AS parcela,
-    TRIM(se1.E1_TIPO)                                            AS tipo_titulo,
-    sx5_tipo.X5_DESCRI                                           AS desc_tipo_titulo,
+    TRIM(se1.E1_FILIAL) AS filial,
+    TRIM(se1.E1_PREFIXO) AS prefixo,
+    TRIM(se1.E1_NUM) AS numero,
+    TRIM(se1.E1_PARCELA) AS parcela,
+    TRIM(se1.E1_TIPO) AS tipo_titulo,
+    sx5_tipo.X5_DESCRI AS desc_tipo_titulo,
 
-    -- Chave composta para joins de embeddings
     TO_HEX(MD5(CONCAT(
       se1.mdmTenantId, '|RECEBER|',
       TRIM(se1.E1_FILIAL), '|',
@@ -195,46 +179,39 @@ contas_receber AS (
       TRIM(se1.E1_NUM), '|',
       TRIM(se1.E1_PARCELA), '|',
       TRIM(se1.E1_TIPO)
-    )))                                                          AS titulo_key,
+    ))) AS titulo_key,
 
-    -- Parceiro: cliente
-    TRIM(se1.E1_CLIENTE)                                         AS cod_parceiro,
-    TRIM(se1.E1_LOJA)                                            AS loja_parceiro,
-    sa1.A1_NOME                                                  AS nome_parceiro,
-    sa1.A1_CGC                                                   AS cnpj_cpf_parceiro,
-    sa1.A1_MUN                                                   AS municipio_parceiro,
-    sa1.A1_EST                                                   AS estado_parceiro,
-    sa1.A1_EMAIL                                                 AS email_parceiro,
+    TRIM(se1.E1_CLIENTE) AS cod_parceiro,
+    TRIM(se1.E1_LOJA) AS loja_parceiro,
+    sa1.A1_NOME AS nome_parceiro,
+    sa1.A1_CGC AS cnpj_cpf_parceiro,
+    sa1.A1_MUN AS municipio_parceiro,
+    sa1.A1_EST AS estado_parceiro,
+    sa1.A1_EMAIL AS email_parceiro,
 
-    -- Valores financeiros
-    SAFE_CAST(TRIM(se1.E1_VALOR)   AS NUMERIC)                   AS valor_original,
-    SAFE_CAST(TRIM(se1.E1_SALDO)   AS NUMERIC)                   AS saldo_aberto,
-    SAFE_CAST(TRIM(se1.E1_MULTA)   AS NUMERIC)                   AS multa,
-    SAFE_CAST(TRIM(se1.E1_JUROS)   AS NUMERIC)                   AS juros_acumulados,
-    SAFE_CAST(TRIM(se1.E1_DESCONT) AS NUMERIC)                   AS desconto,
-    SAFE_CAST(TRIM(se1.E1_MOEDA)   AS INT64)                     AS cod_moeda,
+    SAFE_CAST(TRIM(se1.E1_VALOR) AS NUMERIC) AS valor_original,
+    SAFE_CAST(TRIM(se1.E1_SALDO) AS NUMERIC) AS saldo_aberto,
+    SAFE_CAST(TRIM(se1.E1_MULTA) AS NUMERIC) AS multa,
+    SAFE_CAST(TRIM(se1.E1_JUROS) AS NUMERIC) AS juros_acumulados,
+    SAFE_CAST(TRIM(se1.E1_DESCONT) AS NUMERIC) AS desconto,
+    SAFE_CAST(TRIM(se1.E1_MOEDA) AS INT64) AS cod_moeda,
 
-    -- Datas
-    PARSE_DATE('%Y%m%d', TRIM(se1.E1_EMISSAO))                   AS data_emissao,
-    PARSE_DATE('%Y%m%d', TRIM(se1.E1_VENCTO))                    AS data_vencimento,
-    PARSE_DATE('%Y%m%d', NULLIF(TRIM(se1.E1_VENCREA), ''))       AS data_vencimento_real,
-    PARSE_DATE('%Y%m%d', NULLIF(TRIM(se1.E1_BAIXA),   ''))       AS data_baixa,
+    PARSE_DATE('%Y%m%d', TRIM(se1.E1_EMISSAO)) AS data_emissao,
+    PARSE_DATE('%Y%m%d', TRIM(se1.E1_VENCTO)) AS data_vencimento,
+    PARSE_DATE('%Y%m%d', NULLIF(TRIM(se1.E1_VENCREA), '')) AS data_vencimento_real,
+    PARSE_DATE('%Y%m%d', NULLIF(TRIM(se1.E1_BAIXA), '')) AS data_baixa,
 
-    -- Histórico / observação
-    NULLIF(TRIM(se1.E1_HIST), '')                                AS historico,
+    NULLIF(TRIM(se1.E1_HIST), '') AS historico,
 
-    -- Contabilidade
-    TRIM(se1.E1_CCUSTO)                                          AS centro_custo,
-    ctt.CTT_DESC01                                               AS desc_centro_custo,
-    TRIM(se1.E1_NATUREZ)                                         AS natureza_financeira,
-    sx5_nat.X5_DESCRI                                            AS desc_natureza_financeira,
+    TRIM(se1.E1_CCUSTO) AS centro_custo,
+    ctt.CTT_DESC01 AS desc_centro_custo,
+    TRIM(se1.E1_NATUREZ) AS natureza_financeira,
+    sx5_nat.X5_DESCRI AS desc_natureza_financeira,
 
-    -- Banco / portador
-    TRIM(se1.E1_PORTADO)                                         AS cod_portador,
-    sa6.A6_AGENCIA                                               AS agencia,
-    sa6.A6_NUMCON                                                AS conta_corrente,
+    TRIM(se1.E1_PORTADO) AS cod_portador,
+    sa6.A6_AGENCIA AS agencia,
+    sa6.A6_NUMCON AS conta_corrente,
 
-    -- Metadados de ingestão
     se1._ingestionDatetime,
     se1.mdmCounterForEntity,
     se1.protheus_pk
@@ -242,52 +219,46 @@ contas_receber AS (
   FROM se1_receber_dataprepingestion AS se1
 
   LEFT JOIN sa1_clientes AS sa1
-    ON  sa1.mdmTenantId   = se1.mdmTenantId
+    ON sa1.mdmTenantId = se1.mdmTenantId
     AND sa1.company_group = se1.company_group
-    AND sa1.A1_COD        = TRIM(se1.E1_CLIENTE)
-    AND sa1.A1_LOJA       = TRIM(se1.E1_LOJA)
+    AND sa1.A1_COD = TRIM(se1.E1_CLIENTE)
+    AND sa1.A1_LOJA = TRIM(se1.E1_LOJA)
 
   LEFT JOIN ctt_centro_custo AS ctt
-    ON  ctt.mdmTenantId   = se1.mdmTenantId
+    ON ctt.mdmTenantId = se1.mdmTenantId
     AND ctt.company_group = se1.company_group
-    AND ctt.CTT_CUSTO     = TRIM(se1.E1_CCUSTO)
+    AND ctt.CTT_CUSTO = TRIM(se1.E1_CCUSTO)
 
   LEFT JOIN sx5_tabelas AS sx5_nat
-    ON  sx5_nat.mdmTenantId   = se1.mdmTenantId
+    ON sx5_nat.mdmTenantId = se1.mdmTenantId
     AND sx5_nat.company_group = se1.company_group
-    AND sx5_nat.X5_TABELA     = '05'
-    AND sx5_nat.X5_CHAVE      = TRIM(se1.E1_NATUREZ)
+    AND sx5_nat.X5_TABELA = '05'
+    AND sx5_nat.X5_CHAVE = TRIM(se1.E1_NATUREZ)
 
   LEFT JOIN sx5_tabelas AS sx5_tipo
-    ON  sx5_tipo.mdmTenantId   = se1.mdmTenantId
+    ON sx5_tipo.mdmTenantId = se1.mdmTenantId
     AND sx5_tipo.company_group = se1.company_group
-    AND sx5_tipo.X5_TABELA     = 'A1'
-    AND sx5_tipo.X5_CHAVE      = TRIM(se1.E1_TIPO)
+    AND sx5_tipo.X5_TABELA = 'A1'
+    AND sx5_tipo.X5_CHAVE = TRIM(se1.E1_TIPO)
 
   LEFT JOIN sa6_bancos AS sa6
-    ON  sa6.mdmTenantId   = se1.mdmTenantId
+    ON sa6.mdmTenantId = se1.mdmTenantId
     AND sa6.company_group = se1.company_group
-    AND sa6.A6_COD        = TRIM(se1.E1_PORTADO)
+    AND sa6.A6_COD = TRIM(se1.E1_PORTADO)
 ),
-
-
--- ENRIQUECIMENTO — SE2 + dimensões
-
 
 contas_pagar AS (
   SELECT
-    -- Identificação do título
-    'PAGAR'                                                      AS carteira,
+    'PAGAR' AS carteira,
     se2.mdmTenantId,
     se2.company_group,
-    TRIM(se2.E2_FILIAL)                                          AS filial,
-    TRIM(se2.E2_PREFIXO)                                         AS prefixo,
-    TRIM(se2.E2_NUM)                                             AS numero,
-    TRIM(se2.E2_PARCELA)                                         AS parcela,
-    TRIM(se2.E2_TIPO)                                            AS tipo_titulo,
-    sx5_tipo.X5_DESCRI                                           AS desc_tipo_titulo,
+    TRIM(se2.E2_FILIAL) AS filial,
+    TRIM(se2.E2_PREFIXO) AS prefixo,
+    TRIM(se2.E2_NUM) AS numero,
+    TRIM(se2.E2_PARCELA) AS parcela,
+    TRIM(se2.E2_TIPO) AS tipo_titulo,
+    sx5_tipo.X5_DESCRI AS desc_tipo_titulo,
 
-    -- Chave composta para joins de embeddings
     TO_HEX(MD5(CONCAT(
       se2.mdmTenantId, '|PAGAR|',
       TRIM(se2.E2_FILIAL), '|',
@@ -295,46 +266,39 @@ contas_pagar AS (
       TRIM(se2.E2_NUM), '|',
       TRIM(se2.E2_PARCELA), '|',
       TRIM(se2.E2_TIPO)
-    )))                                                          AS titulo_key,
+    ))) AS titulo_key,
 
-    -- Parceiro: fornecedor
-    TRIM(se2.E2_FORNECE)                                         AS cod_parceiro,
-    TRIM(se2.E2_LOJA)                                            AS loja_parceiro,
-    sa2.A2_NOME                                                  AS nome_parceiro,
-    sa2.A2_CGC                                                   AS cnpj_cpf_parceiro,
-    sa2.A2_MUN                                                   AS municipio_parceiro,
-    sa2.A2_EST                                                   AS estado_parceiro,
-    sa2.A2_EMAIL                                                 AS email_parceiro,
+    TRIM(se2.E2_FORNECE) AS cod_parceiro,
+    TRIM(se2.E2_LOJA) AS loja_parceiro,
+    sa2.A2_NOME AS nome_parceiro,
+    sa2.A2_CGC AS cnpj_cpf_parceiro,
+    sa2.A2_MUN AS municipio_parceiro,
+    sa2.A2_EST AS estado_parceiro,
+    sa2.A2_EMAIL AS email_parceiro,
 
-    -- Valores financeiros
-    SAFE_CAST(TRIM(se2.E2_VALOR)   AS NUMERIC)                   AS valor_original,
-    SAFE_CAST(TRIM(se2.E2_SALDO)   AS NUMERIC)                   AS saldo_aberto,
-    SAFE_CAST(TRIM(se2.E2_MULTA)   AS NUMERIC)                   AS multa,
-    SAFE_CAST(TRIM(se2.E2_JUROS)   AS NUMERIC)                   AS juros_acumulados,
-    SAFE_CAST(TRIM(se2.E2_DESCONT) AS NUMERIC)                   AS desconto,
-    SAFE_CAST(TRIM(se2.E2_MOEDA)   AS INT64)                     AS cod_moeda,
+    SAFE_CAST(TRIM(se2.E2_VALOR) AS NUMERIC) AS valor_original,
+    SAFE_CAST(TRIM(se2.E2_SALDO) AS NUMERIC) AS saldo_aberto,
+    SAFE_CAST(TRIM(se2.E2_MULTA) AS NUMERIC) AS multa,
+    SAFE_CAST(TRIM(se2.E2_JUROS) AS NUMERIC) AS juros_acumulados,
+    SAFE_CAST(TRIM(se2.E2_DESCONT) AS NUMERIC) AS desconto,
+    SAFE_CAST(TRIM(se2.E2_MOEDA) AS INT64) AS cod_moeda,
 
-    -- Datas
-    PARSE_DATE('%Y%m%d', TRIM(se2.E2_EMISSAO))                   AS data_emissao,
-    PARSE_DATE('%Y%m%d', TRIM(se2.E2_VENCTO))                    AS data_vencimento,
-    PARSE_DATE('%Y%m%d', NULLIF(TRIM(se2.E2_VENCREA), ''))       AS data_vencimento_real,
-    PARSE_DATE('%Y%m%d', NULLIF(TRIM(se2.E2_BAIXA),   ''))       AS data_baixa,
+    PARSE_DATE('%Y%m%d', TRIM(se2.E2_EMISSAO)) AS data_emissao,
+    PARSE_DATE('%Y%m%d', TRIM(se2.E2_VENCTO)) AS data_vencimento,
+    PARSE_DATE('%Y%m%d', NULLIF(TRIM(se2.E2_VENCREA), '')) AS data_vencimento_real,
+    PARSE_DATE('%Y%m%d', NULLIF(TRIM(se2.E2_BAIXA), '')) AS data_baixa,
 
-    -- Histórico / observação
-    NULLIF(TRIM(se2.E2_HIST), '')                                AS historico,
+    NULLIF(TRIM(se2.E2_HIST), '') AS historico,
 
-    -- Contabilidade
-    TRIM(se2.E2_CCUSTO)                                          AS centro_custo,
-    ctt.CTT_DESC01                                               AS desc_centro_custo,
-    TRIM(se2.E2_NATUREZ)                                         AS natureza_financeira,
-    sx5_nat.X5_DESCRI                                            AS desc_natureza_financeira,
+    TRIM(se2.E2_CCUSTO) AS centro_custo,
+    ctt.CTT_DESC01 AS desc_centro_custo,
+    TRIM(se2.E2_NATUREZ) AS natureza_financeira,
+    sx5_nat.X5_DESCRI AS desc_natureza_financeira,
 
-    -- Banco / portador
-    TRIM(se2.E2_PORTADO)                                         AS cod_portador,
-    sa6.A6_AGENCIA                                               AS agencia,
-    sa6.A6_NUMCON                                                AS conta_corrente,
+    TRIM(se2.E2_PORTADO) AS cod_portador,
+    sa6.A6_AGENCIA AS agencia,
+    sa6.A6_NUMCON AS conta_corrente,
 
-    -- Metadados de ingestão
     se2._ingestionDatetime,
     se2.mdmCounterForEntity,
     se2.protheus_pk
@@ -342,37 +306,33 @@ contas_pagar AS (
   FROM se2_pagar_dataprepingestion AS se2
 
   LEFT JOIN sa2_fornecedores AS sa2
-    ON  sa2.mdmTenantId   = se2.mdmTenantId
+    ON sa2.mdmTenantId = se2.mdmTenantId
     AND sa2.company_group = se2.company_group
-    AND sa2.A2_COD        = TRIM(se2.E2_FORNECE)
-    AND sa2.A2_LOJA       = TRIM(se2.E2_LOJA)
+    AND sa2.A2_COD = TRIM(se2.E2_FORNECE)
+    AND sa2.A2_LOJA = TRIM(se2.E2_LOJA)
 
   LEFT JOIN ctt_centro_custo AS ctt
-    ON  ctt.mdmTenantId   = se2.mdmTenantId
+    ON ctt.mdmTenantId = se2.mdmTenantId
     AND ctt.company_group = se2.company_group
-    AND ctt.CTT_CUSTO     = TRIM(se2.E2_CCUSTO)
+    AND ctt.CTT_CUSTO = TRIM(se2.E2_CCUSTO)
 
   LEFT JOIN sx5_tabelas AS sx5_nat
-    ON  sx5_nat.mdmTenantId   = se2.mdmTenantId
+    ON sx5_nat.mdmTenantId = se2.mdmTenantId
     AND sx5_nat.company_group = se2.company_group
-    AND sx5_nat.X5_TABELA     = '05'
-    AND sx5_nat.X5_CHAVE      = TRIM(se2.E2_NATUREZ)
+    AND sx5_nat.X5_TABELA = '05'
+    AND sx5_nat.X5_CHAVE = TRIM(se2.E2_NATUREZ)
 
   LEFT JOIN sx5_tabelas AS sx5_tipo
-    ON  sx5_tipo.mdmTenantId   = se2.mdmTenantId
+    ON sx5_tipo.mdmTenantId = se2.mdmTenantId
     AND sx5_tipo.company_group = se2.company_group
-    AND sx5_tipo.X5_TABELA     = 'A2'
-    AND sx5_tipo.X5_CHAVE      = TRIM(se2.E2_TIPO)
+    AND sx5_tipo.X5_TABELA = 'A2'
+    AND sx5_tipo.X5_CHAVE = TRIM(se2.E2_TIPO)
 
   LEFT JOIN sa6_bancos AS sa6
-    ON  sa6.mdmTenantId   = se2.mdmTenantId
+    ON sa6.mdmTenantId = se2.mdmTenantId
     AND sa6.company_group = se2.company_group
-    AND sa6.A6_COD        = TRIM(se2.E2_PORTADO)
+    AND sa6.A6_COD = TRIM(se2.E2_PORTADO)
 ),
-
-
--- UNIFICAÇÃO — Contas a Pagar + Receber em visão única
-
 
 visao_financeira AS (
   SELECT * FROM contas_receber
@@ -380,52 +340,40 @@ visao_financeira AS (
   SELECT * FROM contas_pagar
 ),
 
-
--- MÉTRICAS E CONTEÚDO — Enriquecimento para o agente de IA
-
-
 processedData AS (
   SELECT
     *,
-
-    -- Aging: dias de atraso (positivo = vencido, negativo = a vencer)
-    DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY)               AS dias_vencimento,
-
-    -- Faixa de aging para análise e filtragem semântica
+    DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) AS dias_vencimento,
     CASE
-      WHEN data_vencimento IS NULL                                         THEN 'Sem vencimento'
-      WHEN data_baixa IS NOT NULL                                          THEN 'Liquidado'
-      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 360           THEN 'Vencido > 360 dias'
-      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 180           THEN 'Vencido 181-360 dias'
-      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 90            THEN 'Vencido 91-180 dias'
-      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 30            THEN 'Vencido 31-90 dias'
-      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 0             THEN 'Vencido 1-30 dias'
-      WHEN DATE_DIFF(data_vencimento, CURRENT_DATE(), DAY) BETWEEN 0 AND 7  THEN 'Vence em até 7 dias'
-      WHEN DATE_DIFF(data_vencimento, CURRENT_DATE(), DAY) BETWEEN 8 AND 30 THEN 'Vence em até 30 dias'
-      ELSE                                                                  'A vencer > 30 dias'
-    END                                                            AS faixa_aging,
-
-    -- Ano/Mês de vencimento para agregações temporais
-    FORMAT_DATE('%Y-%m', data_vencimento)                          AS competencia_vencimento,
-    FORMAT_DATE('%Y-%m', data_emissao)                             AS competencia_emissao,
-
-    -- Texto narrativo para indexação semântica (input do agente de IA)
+      WHEN data_vencimento IS NULL THEN 'Sem vencimento'
+      WHEN data_baixa IS NOT NULL THEN 'Liquidado'
+      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 360 THEN 'Vencido > 360 dias'
+      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 180 THEN 'Vencido 181-360 dias'
+      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 90 THEN 'Vencido 91-180 dias'
+      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 30 THEN 'Vencido 31-90 dias'
+      WHEN DATE_DIFF(CURRENT_DATE(), data_vencimento, DAY) > 0 THEN 'Vencido 1-30 dias'
+      WHEN DATE_DIFF(data_vencimento, CURRENT_DATE(), DAY) BETWEEN 0 AND 7 THEN 'Vence em ate 7 dias'
+      WHEN DATE_DIFF(data_vencimento, CURRENT_DATE(), DAY) BETWEEN 8 AND 30 THEN 'Vence em ate 30 dias'
+      ELSE 'A vencer > 30 dias'
+    END AS faixa_aging,
+    FORMAT_DATE('%Y-%m', data_vencimento) AS competencia_vencimento,
+    FORMAT_DATE('%Y-%m', data_emissao) AS competencia_emissao,
     TRIM(CONCAT(
       'Carteira: ', carteira, '. ',
-      'Título: ', prefixo, '-', numero, '-', parcela,
-        IF(desc_tipo_titulo IS NOT NULL, CONCAT(' (', desc_tipo_titulo, ')'), ''), '. ',
-      'Parceiro: ', COALESCE(nome_parceiro, 'Não informado'),
-        IF(cnpj_cpf_parceiro IS NOT NULL, CONCAT(' — CNPJ/CPF: ', cnpj_cpf_parceiro), ''),
-        IF(municipio_parceiro IS NOT NULL,
-           CONCAT(' — ', municipio_parceiro, '/', COALESCE(estado_parceiro, '')), ''), '. ',
+      'Titulo: ', prefixo, '-', numero, '-', parcela,
+      IF(desc_tipo_titulo IS NOT NULL, CONCAT(' (', desc_tipo_titulo, ')'), ''), '. ',
+      'Parceiro: ', COALESCE(nome_parceiro, 'Nao informado'),
+      IF(cnpj_cpf_parceiro IS NOT NULL, CONCAT(' - CNPJ/CPF: ', cnpj_cpf_parceiro), ''),
+      IF(municipio_parceiro IS NOT NULL,
+         CONCAT(' - ', municipio_parceiro, '/', COALESCE(estado_parceiro, '')), ''), '. ',
       'Valor original: R$ ', FORMAT('%.2f', COALESCE(valor_original, 0)), '. ',
       'Saldo em aberto: R$ ', FORMAT('%.2f', COALESCE(saldo_aberto, 0)), '. ',
       IF(multa > 0,
          CONCAT('Multa: R$ ', FORMAT('%.2f', multa), '. '), ''),
       IF(juros_acumulados > 0,
          CONCAT('Juros: R$ ', FORMAT('%.2f', juros_acumulados), '. '), ''),
-      'Emissão: ', COALESCE(FORMAT_DATE('%d/%m/%Y', data_emissao), 'não informada'), '. ',
-      'Vencimento: ', COALESCE(FORMAT_DATE('%d/%m/%Y', data_vencimento), 'não informado'), '. ',
+      'Emissao: ', COALESCE(FORMAT_DATE('%d/%m/%Y', data_emissao), 'nao informada'), '. ',
+      'Vencimento: ', COALESCE(FORMAT_DATE('%d/%m/%Y', data_vencimento), 'nao informado'), '. ',
       IF(desc_natureza_financeira IS NOT NULL,
          CONCAT('Natureza financeira: ', desc_natureza_financeira, '. '), ''),
       IF(desc_centro_custo IS NOT NULL,
@@ -434,17 +382,10 @@ processedData AS (
          CONCAT('Portador: ag. ', agencia,
            IF(conta_corrente IS NOT NULL, CONCAT(' / cc. ', conta_corrente), ''), '. '), ''),
       IF(historico IS NOT NULL,
-         CONCAT('Histórico: ', historico, '.'), '')
-    ))                                                             AS text_concat
-
+         CONCAT('Historico: ', historico, '.'), '')
+    )) AS text_concat
   FROM visao_financeira
-  -- WHERE
-  -- rejection rules
 ),
-
-
--- EMBEDDINGS — Representação vetorial para busca semântica
-
 
 embeddedData AS (
   SELECT

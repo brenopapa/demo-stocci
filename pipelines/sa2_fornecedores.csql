@@ -1,9 +1,4 @@
 WITH
-
-
--- LOOKUP — Tipos de fornecedor e regiões (SX5)
-
-
 sx5_tipos_fornecedor AS (
   SELECT * EXCEPT(ranking)
   FROM (
@@ -12,7 +7,7 @@ sx5_tipos_fornecedor AS (
       company_group,
       X5_FILIAL,
       TRIM(X5_TABELA) AS X5_TABELA,
-      TRIM(X5_CHAVE)  AS X5_CHAVE,
+      TRIM(X5_CHAVE) AS X5_CHAVE,
       X5_DESCRI,
       ROW_NUMBER() OVER (
         PARTITION BY mdmTenantId, company_group, X5_FILIAL, X5_TABELA, X5_CHAVE
@@ -24,10 +19,6 @@ sx5_tipos_fornecedor AS (
   )
   WHERE ranking = 1
 ),
-
-
--- STAGING — SA2 com deduplicação via QUALIFY
-
 
 sa2_dataprepingestion AS (
   SELECT *
@@ -44,71 +35,57 @@ sa2_dataprepingestion AS (
     AND (mdmDeleted = FALSE OR mdmDeleted IS NULL)
 ),
 
-
--- ENRIQUECIMENTO — SA2 + SX5
-
-
 fornecedores_enriquecidos AS (
   SELECT
-    -- Identificação
     sa2.mdmTenantId,
     sa2.company_group,
-    TRIM(sa2.A2_FILIAL)                                          AS filial,
-    TRIM(sa2.A2_COD)                                             AS cod_fornecedor,
-    TRIM(sa2.A2_LOJA)                                            AS loja,
+    TRIM(sa2.A2_FILIAL) AS filial,
+    TRIM(sa2.A2_COD) AS cod_fornecedor,
+    TRIM(sa2.A2_LOJA) AS loja,
 
-    -- Chave de embedding
     TO_HEX(MD5(CONCAT(
       sa2.mdmTenantId, '|SA2|',
       TRIM(sa2.A2_FILIAL), '|',
       TRIM(sa2.A2_COD), '|',
       TRIM(sa2.A2_LOJA)
-    )))                                                          AS fornecedor_key,
+    ))) AS fornecedor_key,
 
-    -- Dados cadastrais
     sa2.A2_NOME,
-    sa2.A2_NREDUZ                                                AS nome_reduzido,
-    sa2.A2_CGC                                                   AS cnpj_cpf,
+    sa2.A2_NREDUZ AS nome_reduzido,
+    sa2.A2_CGC AS cnpj_cpf,
 
-    -- Endereço
-    sa2.A2_END                                                   AS endereco,
-    sa2.A2_BAIRRO                                                AS bairro,
-    sa2.A2_MUN                                                   AS municipio,
-    sa2.A2_EST                                                   AS estado,
-    sa2.A2_CEP                                                   AS cep,
-    sa2.A2_PAIS                                                  AS pais,
+    sa2.A2_END AS endereco,
+    sa2.A2_BAIRRO AS bairro,
+    sa2.A2_MUN AS municipio,
+    sa2.A2_EST AS estado,
+    sa2.A2_CEP AS cep,
+    sa2.A2_PAIS AS pais,
 
-    -- Contato
-    sa2.A2_TEL                                                   AS telefone,
-    sa2.A2_FAX                                                   AS fax,
-    sa2.A2_EMAIL                                                 AS email,
-    sa2.A2_CONTATO                                               AS contato,
-    sa2.A2_HPAGE                                                 AS site,
+    sa2.A2_TEL AS telefone,
+    sa2.A2_FAX AS fax,
+    sa2.A2_EMAIL AS email,
+    sa2.A2_CONTATO AS contato,
+    sa2.A2_HPAGE AS site,
 
-    -- Classificação
-    TRIM(sa2.A2_TIPO)                                            AS tipo_fornecedor_cod,
-    sx5_tipo.X5_DESCRI                                           AS tipo_fornecedor,
+    TRIM(sa2.A2_TIPO) AS tipo_fornecedor_cod,
+    sx5_tipo.X5_DESCRI AS tipo_fornecedor,
 
-    -- Condições comerciais
-    TRIM(sa2.A2_COND)                                            AS cond_pagamento,
-    TRIM(sa2.A2_BANCO)                                           AS banco_preferencial,
-    TRIM(sa2.A2_AGENCIA)                                         AS agencia_preferencial,
-    TRIM(sa2.A2_NUMCON)                                          AS conta_preferencial,
+    TRIM(sa2.A2_COND) AS cond_pagamento,
+    TRIM(sa2.A2_BANCO) AS banco_preferencial,
+    TRIM(sa2.A2_AGENCIA) AS agencia_preferencial,
+    TRIM(sa2.A2_NUMCON) AS conta_preferencial,
 
-    -- Situação
-    TRIM(sa2.A2_MSBLQL)                                          AS bloqueio,
+    TRIM(sa2.A2_MSBLQL) AS bloqueio,
     CASE TRIM(sa2.A2_MSBLQL)
       WHEN '1' THEN 'Bloqueado por financeiro'
       WHEN '2' THEN 'Bloqueado por compras'
       WHEN '3' THEN 'Bloqueado por ambos'
       WHEN ' ' THEN 'Desbloqueado'
-      ELSE          TRIM(sa2.A2_MSBLQL)
-    END                                                          AS status_bloqueio,
+      ELSE TRIM(sa2.A2_MSBLQL)
+    END AS status_bloqueio,
 
-    -- Saldo a pagar
-    SAFE_CAST(TRIM(sa2.A2_SALDUP)  AS NUMERIC)                   AS saldo_duplicatas,
+    SAFE_CAST(TRIM(sa2.A2_SALDUP) AS NUMERIC) AS saldo_duplicatas,
 
-    -- Metadados de ingestão
     sa2._ingestionDatetime,
     sa2.mdmCounterForEntity,
     sa2.protheus_pk
@@ -116,56 +93,43 @@ fornecedores_enriquecidos AS (
   FROM sa2_dataprepingestion AS sa2
 
   LEFT JOIN sx5_tipos_fornecedor AS sx5_tipo
-    ON  sx5_tipo.mdmTenantId   = sa2.mdmTenantId
+    ON sx5_tipo.mdmTenantId = sa2.mdmTenantId
     AND sx5_tipo.company_group = sa2.company_group
-    AND sx5_tipo.X5_TABELA     = 'A2'
-    AND sx5_tipo.X5_CHAVE      = TRIM(sa2.A2_TIPO)
-
+    AND sx5_tipo.X5_TABELA = 'A2'
+    AND sx5_tipo.X5_CHAVE = TRIM(sa2.A2_TIPO)
 ),
-
-
--- MÉTRICAS E CONTEÚDO — Texto narrativo para o agente de IA
-
 
 processedData AS (
   SELECT
     *,
 
-    -- Indicador de risco operacional simples
     CASE
-      WHEN bloqueio NOT IN (' ', '')                       THEN 'Bloqueado'
-      WHEN cnpj_cpf IS NULL OR TRIM(cnpj_cpf) = ''        THEN 'Sem CNPJ/CPF'
-      ELSE                                                  'Regular'
-    END                                                    AS status_operacional,
+      WHEN bloqueio NOT IN (' ', '') THEN 'Bloqueado'
+      WHEN cnpj_cpf IS NULL OR TRIM(cnpj_cpf) = '' THEN 'Sem CNPJ/CPF'
+      ELSE 'Regular'
+    END AS status_operacional,
 
-    -- Texto narrativo para indexação semântica
     TRIM(CONCAT(
       'Fornecedor: ', A2_NOME,
-        IF(nome_reduzido IS NOT NULL, CONCAT(' (', nome_reduzido, ')'), ''), '. ',
-      'Código: ', cod_fornecedor, '-', loja, '. ',
+      IF(nome_reduzido IS NOT NULL, CONCAT(' (', nome_reduzido, ')'), ''), '. ',
+      'Codigo: ', cod_fornecedor, '-', loja, '. ',
       IF(tipo_fornecedor IS NOT NULL, CONCAT('Tipo: ', tipo_fornecedor, '. '), ''),
-      'CNPJ/CPF: ', COALESCE(cnpj_cpf, 'Não informado'), '. ',
-      'Localização: ',
-        COALESCE(municipio, ''), IF(estado IS NOT NULL, CONCAT('/', estado), ''),
-        IF(pais IS NOT NULL AND TRIM(pais) NOT IN ('', 'BRA', 'Brasil'), CONCAT(' — ', pais), ''), '. ',
-      IF(cond_pagamento IS NOT NULL,  CONCAT('Condição de pagamento: ', cond_pagamento, '. '), ''),
+      'CNPJ/CPF: ', COALESCE(cnpj_cpf, 'Nao informado'), '. ',
+      'Localizacao: ',
+      COALESCE(municipio, ''), IF(estado IS NOT NULL, CONCAT('/', estado), ''),
+      IF(pais IS NOT NULL AND TRIM(pais) NOT IN ('', 'BRA', 'Brasil'), CONCAT(' - ', pais), ''), '. ',
+      IF(cond_pagamento IS NOT NULL, CONCAT('Condicao de pagamento: ', cond_pagamento, '. '), ''),
       IF(banco_preferencial IS NOT NULL,
          CONCAT('Banco preferencial: ', banco_preferencial,
            IF(agencia_preferencial IS NOT NULL, CONCAT(' / ag. ', agencia_preferencial), ''),
-           IF(conta_preferencial   IS NOT NULL, CONCAT(' / cc. ', conta_preferencial), ''), '. '), ''),
+           IF(conta_preferencial IS NOT NULL, CONCAT(' / cc. ', conta_preferencial), ''), '. '), ''),
       'Status: ', status_bloqueio, '. ',
-      IF(email IS NOT NULL,    CONCAT('E-mail: ', email, '. '), ''),
+      IF(email IS NOT NULL, CONCAT('E-mail: ', email, '. '), ''),
       IF(telefone IS NOT NULL, CONCAT('Telefone: ', telefone, '.'), '')
-    ))                                                     AS text_concat
+    )) AS text_concat
 
   FROM fornecedores_enriquecidos
-  -- WHERE
-  -- rejection rules
 ),
-
-
--- EMBEDDINGS — Representação vetorial para busca semântica
-
 
 embeddedData AS (
   SELECT
