@@ -183,6 +183,52 @@
                 "realtime": false
             },
             "fanOut": true
+        },
+        {
+            "pipelineName": "Atendimento de Metas",
+            "pipelineDescription": "Cálculo de atendimento de metas de vendas versus recebimentos",
+            "outputDataModelName": "atendimentometas",
+            "cronExpressions": [],
+            "timeZone": "America/Sao_Paulo",
+            "processScript": "pipelines/atendimento_metas.csql",
+            "sourceEntities": {
+                "dataModels": [],
+                "stagings": [
+                    {
+                        "connectorName": "protheus_carol",
+                        "stagingName": "ingestion_stg_protheus_carol_se1"
+                    }
+                ]
+            },
+            "checkExistsDataToProcess": false,
+            "useBatchNotification": false,
+            "sendTo": {
+                "bigquery": {
+                    "customer": true,
+                    "unified": true
+                },
+                "subscriptions": {
+                    "customer": false,
+                    "unified": false
+                },
+                "lowLatency": {
+                    "unified": true,
+                    "customer": true
+                },
+                "realtime": false
+            },
+            "clear": {
+                "bigquery": {
+                    "unified": false,
+                    "customer": false
+                },
+                "subscriptions": {
+                    "unified": false,
+                    "customer": false
+                },
+                "realtime": false
+            },
+            "fanOut": true
         }
     ],
     "version": "V2"

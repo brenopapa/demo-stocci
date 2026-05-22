@@ -1,0 +1,78 @@
+WITH
+metas_vendas AS (
+  SELECT data, CAST(meta AS NUMERIC) AS meta
+  FROM UNNEST([
+    STRUCT(DATE '2018-01-01' AS data, 559959 AS meta),
+    STRUCT(DATE '2019-01-01' AS data, 1490436 AS meta),
+    STRUCT(DATE '2020-01-01' AS data, 3967073 AS meta),
+    STRUCT(DATE '2021-01-01' AS data, 10559098 AS meta),
+    STRUCT(DATE '2022-01-01' AS data, 28105008 AS meta),
+    STRUCT(DATE '2023-01-01' AS data, 74806712 AS meta),
+    STRUCT(DATE '2024-01-01' AS data, 199111996 AS meta),
+    STRUCT(DATE '2025-01-01' AS data, 529973659 AS meta),
+    STRUCT(DATE '2026-01-01' AS data, 1410623591 AS meta),
+    STRUCT(DATE '2027-01-01' AS data, 3754637390 AS meta),
+    STRUCT(DATE '2028-01-01' AS data, 9993666659 AS meta),
+    STRUCT(DATE '2029-01-01' AS data, 6176763790 AS meta)
+  ])
+),
+
+se1_deduped AS (
+  SELECT *
+  FROM (
+    SELECT
+      mdmTenantId,
+      company_group,
+      PARSE_DATE('%Y%m%d', TRIM(E1_EMISSAO)) AS data_emissao,
+      DATE_TRUNC(PARSE_DATE('%Y%m%d', TRIM(E1_EMISSAO)), YEAR) AS ano_emissao,
+      SAFE_CAST(TRIM(E1_VALOR) AS NUMERIC) AS E1_VALOR,
+      TRIM(Deleted) AS Deleted,
+      mdmDeleted,
+      _ingestionDatetime,
+      mdmCounterForEntity,
+      protheus_pk,
+      ROW_NUMBER() OVER (
+        PARTITION BY mdmTenantId, protheus_pk
+        ORDER BY _ingestionDatetime DESC, mdmCounterForEntity DESC
+      ) AS ranking
+    FROM ingestion_stg_protheus_carol_se1
+    WHERE TRIM(Deleted) = 'false'
+  ) AS stg
+  WHERE ranking = 1
+    AND (mdmDeleted = FALSE OR mdmDeleted IS NULL)
+),
+
+se1_aggregated AS (
+  SELECT
+    mdmTenantId,
+    company_group,
+    ano_emissao AS data,
+    SUM(E1_VALOR) AS realizado_emissao
+  FROM se1_deduped
+  WHERE data_emissao IS NOT NULL
+  GROUP BY mdmTenantId, company_group, ano_emissao
+),
+
+metas_com_realizacao AS (
+  SELECT
+    se1.mdmTenantId,
+    se1.company_group,
+    se1.data,
+    COALESCE(metas.meta, 0) AS meta,
+    se1.realizado_emissao,
+    SAFE_DIVIDE(se1.realizado_emissao, metas.meta) * 100 AS percentual_atendimento
+  FROM se1_aggregated AS se1
+  LEFT JOIN metas_vendas AS metas
+    ON metas.data = se1.data
+)
+
+SELECT
+  data,
+  SUM(meta) AS meta,
+  SUM(realizado_emissao) AS realizado_emissao,
+  SAFE_DIVIDE(SUM(realizado_emissao), SUM(meta)) * 100 AS percentual_atendimento,
+  NULL AS __mdmId,
+  0 AS __mdmCounterForEntity
+FROM metas_com_realizacao
+GROUP BY data
+ORDER BY data
